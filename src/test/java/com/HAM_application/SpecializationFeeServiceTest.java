@@ -2,6 +2,7 @@ package com.HAM_application;
 
 import com.HAM_application.dao.SpecializationFeeDao;
 import com.HAM_application.dao.entity.SpecializationFeeEntity;
+import com.HAM_application.exception.IllegalArgumentException;
 import com.HAM_application.exception.SpecializationNotFoundException;
 import com.HAM_application.service.SpecializationFeeService;
 
@@ -42,6 +43,31 @@ class SpecializationFeeServiceTest {
     }
 
     @Test
+    void addFee_ShouldTrimInputsBeforeSaving() {
+        SpecializationFeeEntity persisted = new SpecializationFeeEntity("Cardiologist", new BigDecimal("1500"));
+
+        when(feeDao.save(any(SpecializationFeeEntity.class))).thenReturn(persisted);
+
+        feeService.addFee("  Cardiologist  ", new BigDecimal("1500"));
+
+        verify(feeDao).save(argThat(entity ->
+                "Cardiologist".equals(entity.getSpecialization()) &&
+                        new BigDecimal("1500").equals(entity.getFee())));
+    }
+
+    @Test
+    void addFee_ShouldRejectInvalidInputs() {
+        assertThrows(IllegalArgumentException.class,
+                () -> feeService.addFee("   ", new BigDecimal("1500")));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> feeService.addFee("Cardiologist", BigDecimal.ZERO));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> feeService.addFee("Cardiologist", null));
+    }
+
+    @Test
     void updateFee_ShouldUpdateExistingFee() {
         SpecializationFeeEntity fee = new SpecializationFeeEntity("Dermatologist", new BigDecimal("1000"));
 
@@ -63,6 +89,15 @@ class SpecializationFeeServiceTest {
     }
 
     @Test
+    void updateFee_ShouldRejectInvalidAmount() {
+        SpecializationFeeEntity fee = new SpecializationFeeEntity("ENT", new BigDecimal("900"));
+        when(feeDao.findBySpecialization("ENT")).thenReturn(Optional.of(fee));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> feeService.updateFee("ENT", new BigDecimal("-10")));
+    }
+
+    @Test
     void getFeeBySpecialization_ShouldReturnFee() {
         SpecializationFeeEntity fee = new SpecializationFeeEntity("General", new BigDecimal("800"));
         when(feeDao.findBySpecialization("General")).thenReturn(Optional.of(fee));
@@ -78,6 +113,12 @@ class SpecializationFeeServiceTest {
 
         assertThrows(SpecializationNotFoundException.class,
                 () -> feeService.getFeeBySpecialization("Neurologist"));
+    }
+
+    @Test
+    void getFeeBySpecialization_ShouldRejectBlankInput() {
+        assertThrows(IllegalArgumentException.class,
+                () -> feeService.getFeeBySpecialization("   "));
     }
 
     @Test

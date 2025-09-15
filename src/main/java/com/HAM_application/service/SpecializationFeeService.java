@@ -2,6 +2,7 @@ package com.HAM_application.service;
 
 import com.HAM_application.dao.SpecializationFeeDao;
 import com.HAM_application.dao.entity.SpecializationFeeEntity;
+import com.HAM_application.exception.IllegalArgumentException;
 import com.HAM_application.exception.SpecializationNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,31 +26,39 @@ public class SpecializationFeeService {
 
     // Add new specialization fee
     public SpecializationFeeEntity addFee(String specialization, BigDecimal fee) {
-        logger.info("Adding new fee for specialization: {} with amount: {}", specialization, fee);
-        SpecializationFeeEntity fees = new SpecializationFeeEntity(specialization, fee);
+        String sanitizedSpecialization = normalizeSpecialization(specialization);
+        BigDecimal sanitizedFee = validateFee(fee);
+
+        logger.info("Adding new fee for specialization: {} with amount: {}", sanitizedSpecialization, sanitizedFee);
+        SpecializationFeeEntity fees = new SpecializationFeeEntity(sanitizedSpecialization, sanitizedFee);
         return feeDao.save(fees);
     }
 
-    
+
     public SpecializationFeeEntity updateFee(String specialization, BigDecimal newAmount) {
-        logger.info("Updating fee for specialization: {} with new amount: {}", specialization, newAmount);
-        SpecializationFeeEntity fees = feeDao.findBySpecialization(specialization)
+        String sanitizedSpecialization = normalizeSpecialization(specialization);
+        BigDecimal sanitizedAmount = validateFee(newAmount);
+
+        logger.info("Updating fee for specialization: {} with new amount: {}", sanitizedSpecialization, sanitizedAmount);
+        SpecializationFeeEntity fees = feeDao.findBySpecialization(sanitizedSpecialization)
                 .orElseThrow(() -> {
-                    logger.error("Specialization not found: {}", specialization);
-                    return new SpecializationNotFoundException("Specialization not found: " + specialization);
+                    logger.error("Specialization not found: {}", sanitizedSpecialization);
+                    return new SpecializationNotFoundException("Specialization not found: " + sanitizedSpecialization);
                 });
-        fees.setFee(newAmount);
+        fees.setFee(sanitizedAmount);
         return feeDao.save(fees);
     }
 
-    
+
     public BigDecimal getFeeBySpecialization(String specialization) {
-        logger.info("Fetching fee for specialization: {}", specialization);
-        return feeDao.findBySpecialization(specialization)
+        String sanitizedSpecialization = normalizeSpecialization(specialization);
+
+        logger.info("Fetching fee for specialization: {}", sanitizedSpecialization);
+        return feeDao.findBySpecialization(sanitizedSpecialization)
                 .map(SpecializationFeeEntity::getFee)
                 .orElseThrow(() -> {
-                    logger.error("Specialization not found: {}", specialization);
-                    return new SpecializationNotFoundException("Specialization not found: " + specialization);
+                    logger.error("Specialization not found: {}", sanitizedSpecialization);
+                    return new SpecializationNotFoundException("Specialization not found: " + sanitizedSpecialization);
                 });
     }
 
@@ -59,6 +68,26 @@ public class SpecializationFeeService {
         List<SpecializationFeeEntity> fees = feeDao.findAll();
         logger.info("Total fees found: {}", fees.size());
         return fees;
+    }
+
+    private String normalizeSpecialization(String specialization) {
+        if (specialization == null || specialization.trim().isEmpty()) {
+            logger.error("Invalid specialization input: {}", specialization);
+            throw new IllegalArgumentException("Specialization must not be blank");
+        }
+        return specialization.trim();
+    }
+
+    private BigDecimal validateFee(BigDecimal fee) {
+        if (fee == null) {
+            logger.error("Fee value is required");
+            throw new IllegalArgumentException("Fee must not be null");
+        }
+        if (fee.compareTo(BigDecimal.ZERO) <= 0) {
+            logger.error("Invalid fee amount: {}", fee);
+            throw new IllegalArgumentException("Fee must be greater than zero");
+        }
+        return fee;
     }
 }
 
